@@ -13,11 +13,13 @@ try:
     import wandb
 except ImportError:
     wandb = None
+import sys
+sys.path.append('/home/ligy/open_clip/src/training/')
 
 from open_clip import get_input_dtype, CLIP, CustomTextCLIP
-from .distributed import is_master
-from .zero_shot import zero_shot_eval
-from .precision import get_autocast
+from distributed import is_master
+from zero_shot import zero_shot_eval
+from precision import get_autocast
 
 
 class AverageMeter(object):

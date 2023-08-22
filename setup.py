@@ -1,8 +1,11 @@
 """ Setup
 """
+# from sys import _version_info
 from setuptools import setup, find_packages
 from codecs import open
 from os import path
+
+__version__ = "1.0.0"  # Replace with the desired version number
 
 here = path.abspath(path.dirname(__file__))
 
@@ -21,7 +24,7 @@ TRAINING_REQUIREMENTS = _read_reqs("requirements-training.txt")
 exec(open('src/open_clip/version.py').read())
 setup(
     name='open_clip_torch',
-    version=__version__,
+    version=_version_info,
     description='OpenCLIP',
     long_description=long_description,
     long_description_content_type='text/markdown',

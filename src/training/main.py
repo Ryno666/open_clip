@@ -12,16 +12,19 @@ import torch
 from torch import optim
 from torch.cuda.amp import GradScaler
 
+# 尝试倒入wandb,如果失败则设置wandb为none
 try:
     import wandb
 except ImportError:
     wandb = None
 
+# 尝试导入torch.utils.tensorboard，如果失败则设置tensorboard为None
 try:
     import torch.utils.tensorboard as tensorboard
 except ImportError:
     tensorboard = None
 
+# 尝试导入horovod.torch，如果失败则设置hvd为None
 try:
     import horovod.torch as hvd
 except ImportError:
@@ -36,21 +39,21 @@ from training.scheduler import cosine_lr, const_lr, const_lr_cooldown
 from training.train import train_one_epoch, evaluate
 from training.file_utils import pt_load, check_exists, start_sync_process, remote_sync
 
-
+# 定义最新检查点的名称
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
 
-
+# 定义随机种子函数
 def random_seed(seed=42, rank=0):
     torch.manual_seed(seed + rank)
     np.random.seed(seed + rank)
     random.seed(seed + rank)
 
-
+# 定义自然键函数，用于排序
 def natural_key(string_):
     """See http://www.codinghorror.com/blog/archives/001018.html"""
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_.lower())]
 
-
+# 定义获取最新检查点的函数
 def get_latest_checkpoint(path: str, remote : bool):
     # as writen, this glob recurses, so can pick up checkpoints across multiple sub-folders
     if remote:
@@ -68,16 +71,23 @@ def get_latest_checkpoint(path: str, remote : bool):
 
 
 def main(args):
+    """从命令行获取参数"""
     args = parse_args(args)
-
+    
+    # 如果CUDA可用，设置一些参数
     if torch.cuda.is_available():
         # This enables tf32 on Ampere GPUs which is only 8% slower than
         # float16 and almost as accurate as float32
         # This was a default in pytorch until 1.12
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
+        """
+        deterministic设置为true，cuDNN采用确定性算法执行卷积操作等深度学习运算，即相同输入和模型参数将总是产生相同输出
+                     设置为false可以在性能和稳定性之间找到一个平衡
+        """
         torch.backends.cudnn.deterministic = False
 
+    """允许分布式计算"""
     # fully initialize distributed device environment
     device = init_distributed_device(args)
 
@@ -98,7 +108,9 @@ def main(args):
             f"p_{args.precision}",
         ])
 
+    """resume通常指用于恢复模型训练过程的功能或选项，允许在中断情况下从断点开始训练"""
     resume_latest = args.resume == 'latest'
+    """log_base_path是日志的文件夹"""
     log_base_path = os.path.join(args.logs, args.name)
     args.log_path = None
     if is_master(args, local=args.log_local):
@@ -143,6 +155,9 @@ def main(args):
             # Checking for existing checkpoint via master rank only. It is possible for
             # different rank processes to see different files if a shared file-system is under
             # stress, however it's very difficult to fully work around such situations.
+            """
+            仅通过主级别检查现有检查点。 如果共享文件系统面临压力，则不同级别的进程可能会看到不同的文件，但是很难完全解决这种情况。
+            """
             if args.save_most_recent:
                 # if --save-most-recent flag is set, look for latest at a fixed filename
                 resume_from = os.path.join(checkpoint_path, LATEST_CHECKPOINT_NAME)
@@ -341,14 +356,15 @@ def main(args):
             logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
         else:
             # loading a bare (model only) checkpoint for fine-tune or evaluation
+            # 加载一个只有模型的检查点，用于微调或评估
             model.load_state_dict(checkpoint)
             logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
 
-    # initialize datasets
+    # 初始化数据集
     data = get_data(args, (preprocess_train, preprocess_val), epoch=start_epoch, tokenizer=get_tokenizer(args.model))
     assert len(data), 'At least one train or eval dataset must be specified.'
 
-    # create scheduler if train
+    # 如果训练，创建调度器
     scheduler = None
     if 'train' in data and optimizer is not None:
         total_steps = (data["train"].dataloader.num_batches // args.accum_freq) * args.epochs
@@ -369,6 +385,7 @@ def main(args):
             exit(1)
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
+    # 确定这个工作节点是否应该保存日志和检查点。只有当它是主节点时才这样做
     args.save_logs = args.logs and args.logs.lower() != 'none' and is_master(args)
     writer = None
     if args.save_logs and args.tensorboard:

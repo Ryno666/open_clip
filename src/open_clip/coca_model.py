@@ -15,7 +15,7 @@ from .transformer import (
 from .model import CLIPTextCfg, CLIPVisionCfg, _build_vision_tower, _build_text_tower
 
 try:
-    from transformers import (
+    from transformer import (
         BeamSearchScorer,
         LogitsProcessorList,
         TopPLogitsWarper,

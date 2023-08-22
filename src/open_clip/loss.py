@@ -62,7 +62,10 @@ def gather_features(
 
     return all_image_features, all_text_features
 
-
+"""
+用于训练CLIP模型，计算图像特征和文本特征之间的对比损失，以便模型能够将图像和文本映射到相似的表示空间
+该损失函数使用交叉熵损失来度量图像和文本之间的差异
+"""
 class ClipLoss(nn.Module):
 
     def __init__(
@@ -87,6 +90,8 @@ class ClipLoss(nn.Module):
         self.labels = {}
 
     def get_ground_truth(self, device, num_logits) -> torch.Tensor:
+        # 计算并缓存标签，如果标签数量发生变化或不在缓存中则生成一个新的标签张量
+        # 用world size和local_loss进行调整
         # calculated ground-truth and cache if enabled
         if self.prev_num_logits != num_logits or device not in self.labels:
             labels = torch.arange(num_logits, device=device, dtype=torch.long)
@@ -101,6 +106,7 @@ class ClipLoss(nn.Module):
 
     def get_logits(self, image_features, text_features, logit_scale):
         if self.world_size > 1:
+            
             all_image_features, all_text_features = gather_features(
                 image_features, text_features,
                 self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
@@ -130,7 +136,10 @@ class ClipLoss(nn.Module):
 
         return {"contrastive_loss": total_loss} if output_dict else total_loss
 
-
+"""
+这是一个组合损失函数，结合了对比损失和字幕损失
+除对比损失外还是用交叉熵损失度量模型生成的字幕与真实字幕之间的差异
+"""
 class CoCaLoss(ClipLoss):
     def __init__(
             self,
